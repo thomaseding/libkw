@@ -1,0 +1,63 @@
+# Build directories
+/build/
+/build-*/
+cmake-build-*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+
+# Ninja
+.ninja_deps
+.ninja_log
+build.ninja
+
+# Binaries
+*.exe
+*.out
+*.app
+*.elf
+
+# Libraries
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+
+# Object files
+*.o
+*.obj
+
+# Debug symbols
+*.dSYM/
+*.pdb
+
+# Coverage
+*.gcda
+*.gcno
+*.gcov
+
+# Profiling
+gmon.out
+
+# IDEs
+.vscode/
+.idea/
+
+# Editors
+*~
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.ruff_cache/

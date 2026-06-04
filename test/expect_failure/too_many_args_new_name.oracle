@@ -1,0 +1,12 @@
+In file included from test/expect_failure/too_many_args_new_name.cpp:1:
+src/libkw.hpp: In instantiation of ‘consteval bool libkw::detail::allow_dispatch() [with std::meta::info refl_ = ^^add(int, int); Ts_ = {const libkw::Kw<libkw::S<2>{"x"}>&, int, const libkw::Kw<libkw::S<2>{"y"}>&, int, const libkw::Kw<libkw::S<2>{"z"}>&, int}]’:
+src/libkw.hpp:188:46:   required from ‘decltype(auto) libkw::detail::kw_call(Ts_&& ...) [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {const libkw::Kw<libkw::S<2>{"x"}>&, int, const libkw::Kw<libkw::S<2>{"y"}>&, int, const libkw::Kw<libkw::S<2>{"z"}>&, int}]’
+  188 |   if constexpr (allow_dispatch<Refl_, Ts_...>()) {
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+test/expect_failure/too_many_args_new_name.cpp:12:10:   required from here
+  216 | #define KW_CALL(f, ...) ::libkw::detail::kw_call<^^f>(__VA_ARGS__)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~
+src/libkw.hpp:158:21: error: static assertion failed: Too many named arguments for target function.
+  158 |       static_assert(false, "Too many named arguments for target function.");
+      |                     ^~~~~
+  • ‘false’ evaluates to false
