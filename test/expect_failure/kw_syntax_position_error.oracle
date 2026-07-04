@@ -1,12 +1,12 @@
 In file included from test/expect_failure/kw_syntax_position_error.cpp:1:
-src/libkw.hpp: In instantiation of ‘consteval bool libkw::detail::allow_dispatch() [with std::meta::info refl_ = ^^add(int, int); Ts_ = {int, const libkw::Kw<libkw::S<2>{"x"}>&, const libkw::Kw<libkw::S<2>{"y"}>&, int}]’:
-src/libkw.hpp:188:46:   required from ‘decltype(auto) libkw::detail::kw_call(Ts_&& ...) [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {int, const libkw::Kw<libkw::S<2>{"x"}>&, const libkw::Kw<libkw::S<2>{"y"}>&, int}]’
-  188 |   if constexpr (allow_dispatch<Refl_, Ts_...>()) {
-      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+src/libkw.hpp: In instantiation of ‘consteval auto libkw::detail::prepare_dispatch() [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {int, const libkw::Kw<libkw::S<2>{"x"}>&, const libkw::Kw<libkw::S<2>{"y"}>&, int}]’:
+src/libkw.hpp:202:57:   required from ‘decltype(auto) libkw::detail::kw_call(Ts_&& ...) [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {int, const libkw::Kw<libkw::S<2>{"x"}>&, const libkw::Kw<libkw::S<2>{"y"}>&, int}]’
+  202 |   constexpr auto prep_ = prepare_dispatch<Refl_, Ts_...>();
+      |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
 test/expect_failure/kw_syntax_position_error.cpp:12:10:   required from here
-  216 | #define KW_CALL(f, ...) ::libkw::detail::kw_call<^^f>(__VA_ARGS__)
+  229 | #define KW_CALL(f, ...) ::libkw::detail::kw_call<^^f>(__VA_ARGS__)
       |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~
-src/libkw.hpp:167:33: error: static assertion failed: Keyword tag is syntactically positioned incorrectly.
-  167 |       static_assert(error_code_ != ::libkw::detail::ErrorCode::kw_placement_syntax_error,
-      |                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  • the comparison reduces to ‘(-2 != -2)’
+src/libkw.hpp:177:21: error: static assertion failed: Keyword tag is syntactically positioned incorrectly.
+  177 |       static_assert(false, "Keyword tag is syntactically positioned incorrectly.");
+      |                     ^~~~~
+  • ‘false’ evaluates to false

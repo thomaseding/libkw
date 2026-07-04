@@ -5,8 +5,10 @@
 #include <cstddef>
 #include <exception>
 #include <meta>
+#include <stdexcept>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 namespace libkw {
@@ -21,7 +23,10 @@ struct S {
 
   consteval S(const char (&zstr)[N])
   {
-    if (zstr[N - 1] != 0) throw;
+    if (zstr[N - 1] != 0) {
+      throw std::logic_error(
+          "libkw::S: string literal must be null-terminated with no embedded characters after the terminator");
+    }
     std::copy_n(zstr, N - 1, storage);
   }
 
@@ -45,12 +50,11 @@ template <S Name>
 struct is_kw<Kw<Name>> : std::true_type {};
 
 template <typename... Ts>
-[[nodiscard]] consteval bool all_even_are_kw()
+[[nodiscard]] consteval bool all_kw_placements_valid()
 {
-  constexpr size_t N = sizeof...(Ts) / 2;
   return []<size_t... Js>(std::index_sequence<Js...>) {
-    return (true && ... && is_kw<std::tuple_element_t<2 * Js, std::tuple<Ts...>>>::value);
-  }(std::make_index_sequence<N>{});
+    return (true && ... && (is_kw<std::tuple_element_t<Js, std::tuple<Ts...>>>::value == (Js % 2 == 0)));
+  }(std::make_index_sequence<sizeof...(Ts)>{});
 }
 
 template <typename... Ts>
@@ -64,14 +68,6 @@ template <typename... Ts>
   return names;
 }
 
-// Non-negative values are errors that correspond to a missing kw name corresponding to function argument ordinal.
-//
-// TODO: Display missing kw index info in `static_assert` when compilers support constexper `std::format`.
-enum ErrorCode : int {
-  no_error = -1,
-  kw_placement_syntax_error = -2,
-};
-
 // identifier_of() throws on a nameless parameter; check first so that case
 // gets one clean static_assert instead of an uncaught-exception cascade.
 template <std::meta::info Func>
@@ -83,52 +79,60 @@ template <std::meta::info Func>
   return true;
 }
 
-// Validates count, all names known, no duplicates — any order.
+enum class ErrorKind {
+  none,
+  kw_placement_syntax_error,
+  duplicate_kw_name,
+  missing_kw_name,
+};
+
+// TODO: Display the offending name/index in a `static_assert` when compilers support constexpr `std::format`.
+template <size_t N>
+struct Analysis {
+  ErrorKind kind = ErrorKind::none;
+  // Meaning depends on `kind`: the call-site pair index for duplicate_kw_name,
+  // or the callee's parameter ordinal for missing_kw_name. Unused otherwise.
+  size_t index = 0;
+  // mapping[i] = call-site pair index for parameter i. Only meaningful when kind == none.
+  // Exists to solely to avoid recomputation (for faster compilation).
+  std::array<size_t, N> mapping{};
+};
+
 template <std::meta::info Func, typename... Ts>
-[[nodiscard]] consteval ErrorCode validate_kw()
+[[nodiscard]] consteval auto analyze_kw()
 {
-  if constexpr (!all_even_are_kw<Ts...>()) {
-    return kw_placement_syntax_error;
+  constexpr size_t N = sizeof...(Ts) / 2;
+  if constexpr (!all_kw_placements_valid<Ts...>()) {
+    return Analysis<N>{.kind = ErrorKind::kw_placement_syntax_error};
   } else {
-    constexpr size_t N = sizeof...(Ts) / 2;
     auto params = std::meta::parameters_of(Func);
     auto call_names = extract_call_names<Ts...>();
 
-    std::array<bool, N> matched{}; // used to detect more than one match
     for (size_t j = 0; j < N; ++j) {
+      for (size_t k = 0; k < j; ++k) {
+        if (call_names[j] == call_names[k]) {
+          return Analysis<N>{.kind = ErrorKind::duplicate_kw_name, .index = j};
+        }
+      }
+    }
+
+    Analysis<N> result{};
+    for (size_t i = 0; i < N; ++i) {
+      auto param_name = std::meta::identifier_of(params[i]);
       bool found = false;
-      for (size_t i = 0; i < N; ++i) {
-        if (!matched[i] && std::meta::identifier_of(params[i]) == call_names[j]) {
-          matched[i] = true;
+      for (size_t j = 0; j < N; ++j) {
+        if (call_names[j] == param_name) {
+          result.mapping[i] = j;
           found = true;
           break;
         }
       }
-      if (!found) return static_cast<ErrorCode>(j);
-    }
-    return no_error;
-  }
-}
-
-// mapping[i] = call-site pair index for parameter i.
-template <std::meta::info Func, typename... Ts>
-[[nodiscard]] consteval auto make_mapping()
-{
-  constexpr size_t N = sizeof...(Ts) / 2;
-  auto params = std::meta::parameters_of(Func);
-  auto call_names = extract_call_names<Ts...>();
-
-  std::array<size_t, N> mapping{};
-  for (size_t i = 0; i < N; ++i) {
-    auto param_name = std::meta::identifier_of(params[i]);
-    for (size_t j = 0; j < N; ++j) {
-      if (call_names[j] == param_name) {
-        mapping[i] = j;
-        break;
+      if (!found) {
+        return Analysis<N>{.kind = ErrorKind::missing_kw_name, .index = i};
       }
     }
+    return result;
   }
-  return mapping;
 }
 
 template <std::meta::info Func, size_t N, std::array<size_t, N> Mapping, size_t... Is, typename... Ts>
@@ -144,11 +148,17 @@ template <std::meta::info MemFunc, size_t N, std::array<size_t, N> Mapping, size
   return (std::forward<Obj>(obj).[:MemFunc:])(std::forward<Ts...[2 * Mapping[Is] + 1]>(ts...[2 * Mapping[Is] + 1])...);
 }
 
-template <std::meta::info refl_, typename... Ts_>
-[[nodiscard]] consteval bool allow_dispatch()
+template <std::meta::info Refl_, typename... Ts_>
+[[nodiscard]] consteval auto prepare_dispatch()
 {
-  constexpr size_t n_ = std::meta::parameters_of(refl_).size();
+  constexpr size_t n_ = std::meta::parameters_of(Refl_).size();
   constexpr bool arity_match_ = 2 * n_ == sizeof...(Ts_);
+
+  struct Result {
+    bool ok = false;
+    std::array<size_t, sizeof...(Ts_) / 2> mapping{};
+  };
+
   if constexpr (!arity_match_) {
     // TODO: When fmt::format becomes constexpr, can ditch too-few/too-many branching and just print the counts.
     constexpr bool too_few_args_ = 2 * n_ > sizeof...(Ts_);
@@ -157,19 +167,23 @@ template <std::meta::info refl_, typename... Ts_>
     } else {
       static_assert(false, "Too many named arguments for target function.");
     }
-    return false;
-  } else if constexpr (!all_params_named<refl_>()) {
+    return Result{};
+  } else if constexpr (!all_params_named<Refl_>()) {
     static_assert(false, "All parameters of target function must be named.");
-    return false;
+    return Result{};
   } else {
-    constexpr int error_code_ = ::libkw::detail::validate_kw<refl_, std::remove_cvref_t<Ts_>...>();
-    if constexpr (error_code_ != ::libkw::detail::ErrorCode::no_error) {
-      static_assert(error_code_ != ::libkw::detail::ErrorCode::kw_placement_syntax_error,
-          "Keyword tag is syntactically positioned incorrectly.");
-      static_assert(error_code_ < 0, "Missing required named argument.");
-      return false;
+    constexpr auto analysis_ = ::libkw::detail::analyze_kw<Refl_, std::remove_cvref_t<Ts_>...>();
+    if constexpr (analysis_.kind == ErrorKind::kw_placement_syntax_error) {
+      static_assert(false, "Keyword tag is syntactically positioned incorrectly.");
+      return Result{};
+    } else if constexpr (analysis_.kind == ErrorKind::duplicate_kw_name) {
+      static_assert(false, "Duplicate keyword name in call.");
+      return Result{};
+    } else if constexpr (analysis_.kind == ErrorKind::missing_kw_name) {
+      static_assert(false, "Missing required named argument.");
+      return Result{};
     } else {
-      return true;
+      return Result{.ok = true, .mapping = analysis_.mapping};
     }
   }
 }
@@ -185,10 +199,10 @@ template <typename T>
 template <std::meta::info Refl_, typename... Ts_>
 [[nodiscard, gnu::always_inline]] inline decltype(auto) kw_call(Ts_&&... ts_)
 {
-  if constexpr (allow_dispatch<Refl_, Ts_...>()) {
-    constexpr size_t n_ = std::meta::parameters_of(Refl_).size();
-    constexpr auto mapping_ = make_mapping<Refl_, std::remove_cvref_t<Ts_>...>();
-    return dispatch<Refl_, n_, mapping_>(std::make_index_sequence<n_>{}, std::forward<Ts_>(ts_)...);
+  constexpr auto prep_ = prepare_dispatch<Refl_, Ts_...>();
+  if constexpr (prep_.ok) {
+    return dispatch<Refl_, prep_.mapping.size(), prep_.mapping>(
+        std::make_index_sequence<prep_.mapping.size()>{}, std::forward<Ts_>(ts_)...);
   } else {
     return safe_declval<typename[:std::meta::return_type_of(Refl_):]>();
   }
@@ -197,11 +211,10 @@ template <std::meta::info Refl_, typename... Ts_>
 template <std::meta::info Refl_, typename Obj_, typename... Ts_>
 [[nodiscard, gnu::always_inline]] inline decltype(auto) kw_method_call(Obj_&& obj_, Ts_&&... ts_)
 {
-  if constexpr (allow_dispatch<Refl_, Ts_...>()) {
-    constexpr size_t n_ = std::meta::parameters_of(Refl_).size();
-    constexpr auto mapping_ = make_mapping<Refl_, std::remove_cvref_t<Ts_>...>();
-    return dispatch_method<Refl_, n_, mapping_>(
-        std::forward<Obj_>(obj_), std::make_index_sequence<n_>{}, std::forward<Ts_>(ts_)...);
+  constexpr auto prep_ = prepare_dispatch<Refl_, Ts_...>();
+  if constexpr (prep_.ok) {
+    return dispatch_method<Refl_, prep_.mapping.size(), prep_.mapping>(
+        std::forward<Obj_>(obj_), std::make_index_sequence<prep_.mapping.size()>{}, std::forward<Ts_>(ts_)...);
   } else {
     return safe_declval<typename[:std::meta::return_type_of(Refl_):]>();
   }

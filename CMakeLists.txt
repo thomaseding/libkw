@@ -40,3 +40,15 @@ target_compile_options(test_modal
     PRIVATE
         ${TEST_WARNING_FLAGS}
 )
+
+add_executable(test_standalone_include
+    test/standalone_include.cpp
+)
+target_link_libraries(test_standalone_include
+    PRIVATE
+        libkw
+)
+target_compile_options(test_standalone_include
+    PRIVATE
+        ${TEST_WARNING_FLAGS}
+)

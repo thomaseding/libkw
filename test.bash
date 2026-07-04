@@ -22,6 +22,11 @@ fi
 cmake --build "${BUILD_DIR}" --target test_basic
 ./"${BUILD_DIR}"/test_basic
 
+# libkw.hpp must be fully self-contained (no reliance on a transitive
+# #include arriving via some other header included first in a real program).
+cmake --build "${BUILD_DIR}" --target test_standalone_include
+./"${BUILD_DIR}"/test_standalone_include
+
 # Compile-fail cases: each test/expect_failure/*.cpp must fail to build with
 # output matching its .oracle file.
 python3 test/expect_failure.py

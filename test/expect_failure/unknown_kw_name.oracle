@@ -1,0 +1,12 @@
+In file included from test/expect_failure/unknown_kw_name.cpp:1:
+src/libkw.hpp: In instantiation of ‘consteval auto libkw::detail::prepare_dispatch() [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {const libkw::Kw<libkw::S<2>{"x"}>&, int, const libkw::Kw<libkw::S<2>{"z"}>&, int}]’:
+src/libkw.hpp:202:57:   required from ‘decltype(auto) libkw::detail::kw_call(Ts_&& ...) [with std::meta::info Refl_ = ^^add(int, int); Ts_ = {const libkw::Kw<libkw::S<2>{"x"}>&, int, const libkw::Kw<libkw::S<2>{"z"}>&, int}]’
+  202 |   constexpr auto prep_ = prepare_dispatch<Refl_, Ts_...>();
+      |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+test/expect_failure/unknown_kw_name.cpp:12:10:   required from here
+  229 | #define KW_CALL(f, ...) ::libkw::detail::kw_call<^^f>(__VA_ARGS__)
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~
+src/libkw.hpp:183:21: error: static assertion failed: Missing required named argument.
+  183 |       static_assert(false, "Missing required named argument.");
+      |                     ^~~~~
+  • ‘false’ evaluates to false
